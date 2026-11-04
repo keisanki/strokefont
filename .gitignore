@@ -1,0 +1,18 @@
+# The font library is not redistributed with this package (see README licensing section).
+vaxfont.dat
+fonts/
+
+# Python build and test artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editor / OS files
+.DS_Store
+.idea/
+.vscode/
