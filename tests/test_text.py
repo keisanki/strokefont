@@ -123,6 +123,22 @@ def test_stroketext_rejects_unknown_options():
         sf.StrokeText(0, 0, "x", markup="nope")
 
 
+def test_linespacing_without_matplotlib_getter(monkeypatch):
+    # matplotlib < 3.11 only has Text.set_linespacing, not get_linespacing.
+    monkeypatch.delattr(Text, "get_linespacing", raising=False)
+
+    fig, ax = plt.subplots()
+
+    def height(linespacing):
+        text = sf.StrokeText(0.5, 0.5, "one\ntwo", transform=ax.transAxes,
+                             linespacing=linespacing)
+        ax.add_artist(text)
+        return text.get_window_extent(fig.canvas.get_renderer()).height
+
+    assert height(2.0) > height(1.0)
+    plt.close(fig)
+
+
 def test_multiline_and_markup_modes():
     fig, ax = plt.subplots()
     for i, kwargs in enumerate([

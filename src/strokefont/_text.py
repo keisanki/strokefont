@@ -80,6 +80,18 @@ class _StrokeMixin:
         """
         return get_font(self._sf_font or StrokeText.default_font, self._effective_params())
 
+    def _effective_linespacing(self):
+        """Return the line spacing as a multiple of the font size.
+
+        Matplotlib only gained ``Text.get_linespacing`` in 3.11; older versions expose
+        just the ``_linespacing`` attribute (and default it to 1.2).
+        """
+        try:
+            linespacing = self.get_linespacing()
+        except AttributeError:
+            linespacing = getattr(self, '_linespacing', 1.2)
+        return 1.2 if linespacing == 'normal' else float(linespacing)
+
     # -- geometry ------------------------------------------------------------------
     def _stroke_layout(self, px_per_pt, pos):
         """Return (verts_display, codes, bbox_display)."""
@@ -89,8 +101,7 @@ class _StrokeMixin:
         capheight = self._effective_capheight()
         cap_px = self.get_fontsize() * px_per_pt * capheight
         lines = self.get_text().split('\n')
-        ls = self.get_linespacing()
-        ls = 1.2 if ls == 'normal' else float(ls)         # newer matplotlib: 'normal'
+        ls = self._effective_linespacing()
         pitch = ls / capheight                            # cap units
         lay = [_line_geometry(font, ln, markup, parse_math) for ln in lines]
         W = max(l[2] for l in lay)
@@ -141,8 +152,7 @@ class _StrokeMixin:
         lines = self.get_text().split('\n')
         w, h = bbox.size
         desc = 0.3 * cap_px
-        ls = self.get_linespacing()
-        pitch = (1.2 if ls == 'normal' else float(ls)) * self.get_fontsize() * ppp
+        pitch = self._effective_linespacing() * self.get_fontsize() * ppp
         info = [(ln, (w, h - desc, desc), (0.0, -i * pitch)) for i, ln in enumerate(lines)]
         return bbox, info, ((bbox.x0, bbox.y0), (w, h))
 
