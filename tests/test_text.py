@@ -34,6 +34,57 @@ def test_empty_stroketext_has_zero_extent():
     assert bbox.height == 0
 
 
+def test_install_sets_global_rendering_defaults():
+    sf.install("ROMAN.2", "plain", linewidth=1.1, capheight=0.66,
+               params={"SHGT": 0.75, "LSPC": 4})
+    try:
+        fig, ax = plt.subplots()
+        ax.set_title("title")
+        title = ax.title
+
+        assert isinstance(title, sf.StrokeText)
+        assert title.get_stroke_font().name == "ROMAN.2"
+        assert title.get_stroke_font().shgt == 0.75
+        assert title.get_stroke_font().lspac == 4
+        assert title._effective_linewidth() == 1.1
+        assert title._effective_capheight() == 0.66
+
+        # Arguments on an individual artist still override the installed defaults.
+        text = sf.StrokeText(0, 0, "x", linewidth=2.0, params={"SHGT": 0.9})
+        assert text._effective_linewidth() == 2.0
+        assert text.get_stroke_font().shgt == 0.9
+        assert text.get_stroke_font().lspac == 4
+    finally:
+        sf.uninstall()
+
+
+def test_install_rejects_invalid_defaults():
+    with pytest.raises(ValueError, match="unknown font"):
+        sf.install("NOPE")
+    with pytest.raises(ValueError, match="markup"):
+        sf.install(markup="nope")
+
+
+def test_use_restores_all_global_defaults():
+    before = (sf.StrokeText.default_font, sf.StrokeText.default_markup,
+              sf.StrokeText.default_linewidth, sf.StrokeText.default_capheight,
+              sf.StrokeText.default_params)
+
+    with sf.use("ROMAN.2", "plain", linewidth=1.1, capheight=0.66,
+                params={"SHGT": 0.75}):
+        fig, ax = plt.subplots()
+        ax.set_title("title")
+        assert ax.title.get_stroke_font().name == "ROMAN.2"
+        assert ax.title.get_stroke_font().shgt == 0.75
+        assert ax.title._effective_linewidth() == 1.1
+        assert ax.title._effective_capheight() == 0.66
+
+    after = (sf.StrokeText.default_font, sf.StrokeText.default_markup,
+             sf.StrokeText.default_linewidth, sf.StrokeText.default_capheight,
+             sf.StrokeText.default_params)
+    assert after == before
+
+
 def test_use_installs_and_uninstalls_the_text_factory():
     with sf.use("ROMAN.2"):
         fig, ax = plt.subplots()

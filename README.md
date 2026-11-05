@@ -24,6 +24,7 @@ matplotlib script. The original PSYM control-character syntax is available as an
 | `src/strokefont/_install.py` | Matplotlib text-creation hooks (`use`, `install`, `stroke_texts`) |
 | `examples/` | Runnable demos and the character-map generator |
 | `tests/` | Pytest suite (functional tests skip without `vaxfont.dat`) |
+| `docs/api.md` | Complete API reference for the public package interface |
 | `docs/` | Rendered examples and the generated character map |
 | `pyproject.toml` | Package metadata and build configuration |
 | `vaxfont.dat` | The local font library; not distributed (see [Licensing](#licensing-and-provenance)) |
@@ -139,6 +140,11 @@ python examples/demo_charmap.py            # optional [vaxfont.dat] [charmap.pdf
 
 When the package is not installed, the examples fall back to importing it from `src/`.
 
+## API reference
+
+The complete public API — font loading, `StrokeText`, `install()`/`use()`, `stroke_texts()`,
+symbol mapping and constants — is documented in [`docs/api.md`](docs/api.md).
+
 ## Usage
 
 ### 1. Drop-in: switch a whole script
@@ -161,6 +167,20 @@ without one. Inside it, everything matplotlib creates as `Text` becomes `StrokeT
 `fig.text`, `suptitle`, legends and colour-bar labels. Annotations (`ax.annotate`) keep the normal
 font. Only artists created *while installed* are affected.
 
+Both functions accept the same global rendering defaults as `StrokeText`:
+
+```python
+sf.install("TRIUMF.2", linewidth=1.0, capheight=0.70, params={"SHGT": 0.8})
+
+with sf.use("ROMAN.2", "plain", linewidth=0.8):
+    ...
+```
+
+The signature is `install(font=None, markup=None, *, linewidth=None, capheight=None,
+params=None)`; `use()` takes the same arguments. These values apply to artists created while
+installed, and explicit arguments on an individual `StrokeText` still take precedence. `use()`
+restores all previous defaults when the block exits.
+
 ### 2. A single object
 
 `StrokeText` accepts the usual `Text` arguments: `fontsize`, `color`, `alpha`, `ha`, `va`,
@@ -176,10 +196,10 @@ ax.add_artist(sf.StrokeText(0.5, 0.5, r"decay $e^{-t/\tau}$", font="ROMAN.2", fo
 | Extra argument | Meaning | Default |
 |---|---|---|
 | `font` | One of the 43 font names (below) | `"TRIUMF.2"` (`StrokeText.default_font`) |
-| `linewidth` | Pen width in points | `0.09 * fontsize` |
-| `capheight` | Cap height as a fraction of `fontsize` | `0.72` |
-| `markup` | `"mathtext"`, `"legacy"` or `"plain"` | `"mathtext"` |
-| `params` | PSALPH-style font parameter overrides ([below](#font-parameters)) | none |
+| `linewidth` | Pen width in points | `0.09 * fontsize` (`StrokeText.default_linewidth` if set) |
+| `capheight` | Cap height as a fraction of `fontsize` | `0.72` (`StrokeText.default_capheight`) |
+| `markup` | `"mathtext"`, `"legacy"` or `"plain"` | `"mathtext"` (`StrokeText.default_markup`) |
+| `params` | PSALPH-style font parameter overrides ([below](#font-parameters)) | none (`StrokeText.default_params` if set) |
 
 Sizes are normalised so that the capital-letter height is `capheight * fontsize` in every font,
 so fonts look comparably sized even though their internal grids range from 16 to 246 units. Change

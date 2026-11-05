@@ -39,20 +39,57 @@ class _TextModule(types.ModuleType):
         return getattr(_mpl_text, name)
 
 
-def install(font=None, markup=None):
-    """Make matplotlib create StrokeText wherever it creates Text (tick labels, axis labels,
-    titles, legends, ax.text, fig.text, colour-bar labels).  Affects artists created *after* the
-    call.  `font` and `markup` set the defaults.  Annotation text keeps the normal font.
+def install(font=None, markup=None, *, linewidth=None, capheight=None, params=None):
+    """Make matplotlib create :class:`~strokefont.StrokeText` wherever it creates ``Text``.
 
-    matplotlib.text itself is not modified (Annotation calls Text.__init__ explicitly);
-    instead the other matplotlib modules' references to it are redirected.  Undo: uninstall().
+    This covers tick labels, axis labels, titles, legends, ``ax.text``, ``fig.text``,
+    colour-bar labels and similar artists created *after* the call.  Annotation text keeps the
+    normal font.
+
+    Parameters
+    ----------
+    font : str, optional
+        Default font name from :data:`strokefont.FONT_NAMES`.
+    markup : {"mathtext", "legacy", "plain"}, optional
+        Default markup mode.
+    linewidth : float, optional
+        Default pen width in points.
+    capheight : float, optional
+        Default cap height as a fraction of ``fontsize``.
+    params : dict, optional
+        Default PSALPH-style font parameter overrides.
+
+    Raises
+    ------
+    ValueError
+        If ``font`` is unknown or ``markup`` is invalid.
+
+    Notes
+    -----
+    The optional keyword arguments set global defaults for newly created artists; explicit
+    arguments on an individual :class:`~strokefont.StrokeText` still win.  ``matplotlib.text``
+    itself is not modified, because ``Annotation`` calls ``Text.__init__`` explicitly; instead
+    the other matplotlib modules' references to ``Text`` are redirected.
+
+    Calling :func:`install` while already installed updates the defaults without replacing the
+    hooks again.  Use :func:`uninstall` to undo the installation.
     """
     if font is not None:
-        if font.upper() not in FONT_NAMES:
+        font = font.upper()
+        if font not in FONT_NAMES:
             raise ValueError(f"unknown font {font!r}")
-        StrokeText.default_font = font.upper()
+    if markup is not None and markup not in ('mathtext', 'legacy', 'plain'):
+        raise ValueError("markup must be 'mathtext', 'legacy' or 'plain'")
+    if font is not None:
+        StrokeText.default_font = font
     if markup is not None:
         StrokeText.default_markup = markup
+    if linewidth is not None:
+        StrokeText.default_linewidth = linewidth
+    if capheight is not None:
+        StrokeText.default_capheight = capheight
+    if params is not None:
+        StrokeText.default_params = dict(params)
     if _installed:
         return
     proxy = _TextModule()
@@ -70,30 +107,62 @@ def install(font=None, markup=None):
 
 
 def uninstall():
+    """Undo :func:`install` and restore matplotlib's original ``Text`` references.
+
+    Artists that were already created as :class:`~strokefont.StrokeText` keep their type and
+    rendering options.
+    """
     for mod, attr, val in reversed(_installed):
         setattr(mod, attr, val)
     _installed.clear()
 
 
 @contextlib.contextmanager
-def use(font=None, markup=None):
-    """with strokefont.use('ROMAN.2'): ... figures created inside use stroke fonts."""
-    old = (StrokeText.default_font, StrokeText.default_markup)
-    install(font, markup)
+def use(font=None, markup=None, *, linewidth=None, capheight=None, params=None):
+    """Context manager form of :func:`install`.
+
+    The arguments are the same as for :func:`install`.  All global defaults and matplotlib's
+    original ``Text`` references are restored when the block exits, even if an exception is
+    raised.
+
+    Examples
+    --------
+    >>> with use("ROMAN.2", linewidth=1.0, params={"SHGT": 0.8}):
+    ...     fig, ax = plt.subplots()
+    ...     ax.plot([0, 1], [0, 1])
+    ...     fig.savefig("out.pdf")
+    """
+    old = (StrokeText.default_font, StrokeText.default_markup, StrokeText.default_linewidth,
+           StrokeText.default_capheight, StrokeText.default_params)
+    install(font, markup, linewidth=linewidth, capheight=capheight, params=params)
     try:
         yield
     finally:
         uninstall()
-        StrokeText.default_font, StrokeText.default_markup = old
+        (StrokeText.default_font, StrokeText.default_markup, StrokeText.default_linewidth,
+         StrokeText.default_capheight, StrokeText.default_params) = old
 
 
 def stroke_texts(artist, font=None, **kw):
-    """Switch existing plain Text objects over to stroke rendering, in place.
+    """Convert existing matplotlib text artists to stroke rendering, in place.
 
-    `artist` may be a Figure, Axes, Legend, Text or an iterable of those.  Convert *after* the
-    ticks exist (call fig.canvas.draw() or set the ticks explicitly first); ticks created later by
-    the locator are not converted -- for that use install()/use().  Annotation text is left alone.
-    Legends (entries and title) are converted too: create them first, then call this.
+    Parameters
+    ----------
+    artist : matplotlib.artist.Artist or iterable
+        A ``Figure``, ``Axes``, ``Legend``, ``Text`` or an iterable of those.
+    font : str, optional
+        Font name to apply.  If omitted, the current default is used.
+    **kw
+        Additional options forwarded to :meth:`StrokeText.set_stroke_font`, such as
+        ``linewidth``, ``capheight``, ``markup`` or ``params``.
+
+    Notes
+    -----
+    Convert *after* tick labels and legends exist.  Call ``fig.canvas.draw()`` or set ticks
+    explicitly first; tick labels created later by a locator or interactive zoom are not
+    converted.  For that case use :func:`install` or :func:`use` instead.
+
+    Legends are converted, including their entries and title.  Annotation text is left alone.
     """
     from matplotlib.axes import Axes
     from matplotlib.figure import Figure

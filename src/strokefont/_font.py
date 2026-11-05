@@ -15,6 +15,8 @@ FONT_NAMES = [
     'KANJI2', 'KANJI3', 'KANJI4', 'KANJI5', 'OLDALPH', 'TRIUMF.1', 'TRIUMF.2', 'TSAN',
     'ROMAN.FUTURA', 'ROMAN.SERIF', 'ROMAN.FASHON', 'ROMAN.LOGO1', 'ROMAN.SWISSL',
     'ROMAN.SWISSM', 'ROMAN.SWISSB', 'SPECIAL', 'MATH', 'HEBREW', 'TRIUMF.OUTLINE']
+"""Names of the 43 fonts in ``vaxfont.dat``, in library order."""
+
 _RECLEN = 24000          # one font = two 12000-byte direct-access records
 _FONT_FILE = None
 _cache = {}
@@ -23,7 +25,18 @@ _pcache = {}
 
 # --------------------------------------------------------------------------- font file
 def set_font_file(path):
-    """Use ``path`` as the font library and drop all cached font data."""
+    """Select the binary font library to read.
+
+    Parameters
+    ----------
+    path : str or os.PathLike
+        Path to ``vaxfont.dat``.
+
+    Notes
+    -----
+    All cached fonts and cached line geometry are discarded.  The path is not checked until a
+    font is loaded with :func:`get_font`.
+    """
     global _FONT_FILE
     _FONT_FILE = os.fspath(path)
     _cache.clear()
@@ -54,7 +67,20 @@ def _font_file():
 
 
 def get_font_file():
-    """Return the font-library path that will be used (without loading any glyphs)."""
+    """Return the font-library path that will be used.
+
+    Returns
+    -------
+    str
+        The path selected by :func:`set_font_file`, the ``TRIUMF_FONTS`` environment variable,
+        the packaged ``strokefont/data/vaxfont.dat``, ``fonts/vaxfont.dat``, or ``vaxfont.dat``,
+        in that order.
+
+    Raises
+    ------
+    FileNotFoundError
+        If no ``vaxfont.dat`` file can be found.
+    """
     return _font_file()
 
 
@@ -65,9 +91,49 @@ _PSALPH = {'HSPC': 'hspac', 'VSPC': 'vspac', 'SUPS': 'psup', 'SUBS': 'psub', 'SH
 
 
 class PFont:
-    """One font from vaxfont.dat (layout as documented in PFONT.F)."""
+    """One font loaded from ``vaxfont.dat``.
+
+    The binary layout follows the fields documented in ``PFONT.F``.  Fonts are normally
+    obtained through :func:`get_font`, which caches them.
+
+    Attributes
+    ----------
+    name : str
+        Library name.
+    grid : int
+        Coordinate-grid size.
+    refx, refy : int
+        Reference point in grid units.
+    hspac, vspac : int
+        Fixed advance and line-spacing parameters.
+    psup, psub : tuple of int
+        Superscript and subscript reference points as ``(x, y)``.
+    shgt : float
+        Script height as a fraction of the current character height.
+    scal, sscal : float
+        Horizontal and height scale factors.
+    angl : float
+        Shear angle of the Y axis, in degrees.
+    letterspacing : bool
+        Whether advances use the glyph width plus ``lspac``.
+    lspac : int
+        Letterspacing constant.
+    defined : frozenset of int
+        EBCDIC codes that have their own glyph.
+    cap_height : float
+        Measured cap height in grid units above the baseline.
+    """
 
     def __init__(self, raw, name):
+        """Parse one 24000-byte font record.
+
+        Parameters
+        ----------
+        raw : bytes
+            One complete font record from ``vaxfont.dat``.
+        name : str
+            Library name to assign to the font.
+        """
         h = raw[:180].decode('latin1')
         i8 = lambda k: int(h[k * 8:k * 8 + 8])
         f16 = lambda k: float(h[64 + k * 16:80 + k * 16])
@@ -114,13 +180,48 @@ class PFont:
 
     @property
     def ref(self):
+        """Reference point as ``(refx, refy)`` in grid units."""
         return (self.refx, self.refy)
 
     def glyph(self, code):
+        """Return the geometry of one glyph.
+
+        Parameters
+        ----------
+        code : int
+            EBCDIC character code.
+
+        Returns
+        -------
+        width : int
+            Right edge of the glyph in grid units.
+        vertices : numpy.ndarray
+            ``(N, 2)`` array of grid coordinates.
+        codes : numpy.ndarray
+            Matplotlib ``Path`` codes (``MOVETO`` / ``LINETO``), one per vertex.
+        """
         return self._glyphs[code]
 
     def with_params(self, **params):
-        """Copy with PSALPH-style overrides, e.g. with_params(SHGT=0.7, LSPC=5, SUPS=(0, 25))."""
+        """Return a copy with PSALPH-style parameter overrides.
+
+        Parameters
+        ----------
+        **params
+            Parameter names from the original PSALPH interface, for example
+            ``SHGT=0.7``, ``LSPC=5`` or ``SUPS=(0, 25)``.  Names are case-insensitive.
+
+        Returns
+        -------
+        PFont
+            A copy with the requested overrides.  ``cap_height`` is recalculated if ``REFP``
+            changes.
+
+        Raises
+        ------
+        ValueError
+            If a parameter name is unknown or ``ANGL`` is outside ``(-90, 90)``.
+        """
         f = copy.copy(self)
         for k, v in params.items():
             key = k.upper()
@@ -141,7 +242,28 @@ class PFont:
 
 
 def get_font(name, params=None):
-    """Font by library name (case-insensitive); `params` = optional PSALPH-style overrides."""
+    """Load and cache a font by library name.
+
+    Parameters
+    ----------
+    name : str
+        One of :data:`FONT_NAMES`; matching is case-insensitive.
+    params : dict, optional
+        PSALPH-style overrides, for example ``{"SHGT": 0.8, "LSPC": 4}``.  The resulting
+        configured font is cached separately.
+
+    Returns
+    -------
+    PFont
+        The cached font, or a cached configured copy when ``params`` is given.
+
+    Raises
+    ------
+    ValueError
+        If ``name`` is not a known font or a parameter name is invalid.
+    FileNotFoundError
+        If the font library cannot be found.
+    """
     name = name.upper()
     if name not in FONT_NAMES:
         raise ValueError(f"unknown font {name!r}; see strokefont.FONT_NAMES")

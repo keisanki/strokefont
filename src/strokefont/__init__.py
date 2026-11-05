@@ -40,6 +40,7 @@ from ._symbols import (
 from ._text import StrokeText
 
 __version__ = "0.1.0"
+"""Version of the installed ``strokefont`` package."""
 
 __all__ = [
     "BACKSPACE",

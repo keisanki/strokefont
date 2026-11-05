@@ -32,3 +32,6 @@ def reset_global_state():
     sf.uninstall()
     sf.StrokeText.default_font = "TRIUMF.2"
     sf.StrokeText.default_markup = "mathtext"
+    sf.StrokeText.default_linewidth = None
+    sf.StrokeText.default_capheight = 0.72
+    sf.StrokeText.default_params = None

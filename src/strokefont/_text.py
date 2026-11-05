@@ -12,13 +12,34 @@ from ._layout import _line_geometry
 class _StrokeMixin:
     default_font = 'TRIUMF.2'
     default_markup = 'mathtext'      # 'mathtext' | 'legacy' | 'plain'
+    default_linewidth = None         # points; None -> 0.09 * fontsize
+    default_capheight = 0.72         # cap height as a fraction of fontsize (Helvetica ~0.72)
+    default_params = None            # PSALPH overrides applied to every StrokeText
     _sf_font = None
-    _sf_linewidth = None             # points; None -> 0.09 * fontsize
-    _sf_capheight = 0.72             # cap height as a fraction of fontsize (Helvetica ~0.72)
+    _sf_linewidth = None
+    _sf_capheight = None
     _sf_markup = None
     _sf_params = None
 
     def set_stroke_font(self, font=None, linewidth=None, capheight=None, markup=None, params=None):
+        """Change the stroke-rendering options on this artist.
+
+        Parameters
+        ----------
+        font : str, optional
+            Font name from :data:`strokefont.FONT_NAMES`.
+        linewidth : float, optional
+            Pen width in points.
+        capheight : float, optional
+            Cap height as a fraction of ``fontsize``.
+        markup : {"mathtext", "legacy", "plain"}, optional
+            Markup parser to use.
+        params : dict, optional
+            PSALPH-style font parameter overrides.
+
+        Only arguments that are not ``None`` are changed.  The artist is marked stale so the
+        next draw uses the new settings.
+        """
         if font is not None:
             if font.upper() not in FONT_NAMES:
                 raise ValueError(f"unknown font {font!r}; see strokefont.FONT_NAMES")
@@ -35,8 +56,29 @@ class _StrokeMixin:
             self._sf_params = dict(params)
         self.stale = True
 
+    def _effective_linewidth(self):
+        linewidth = self._sf_linewidth
+        if linewidth is None:
+            linewidth = StrokeText.default_linewidth
+        return 0.09 * self.get_fontsize() if linewidth is None else linewidth
+
+    def _effective_capheight(self):
+        return (self._sf_capheight if self._sf_capheight is not None
+                else StrokeText.default_capheight)
+
+    def _effective_params(self):
+        params = StrokeText.default_params
+        if self._sf_params:
+            params = {**(params or {}), **self._sf_params}
+        return params
+
     def get_stroke_font(self):
-        return get_font(self._sf_font or StrokeText.default_font, self._sf_params)
+        """Return the effective :class:`~strokefont.PFont` for this artist.
+
+        Per-artist parameters are merged over the defaults installed by
+        :func:`strokefont.install` or :func:`strokefont.use`.
+        """
+        return get_font(self._sf_font or StrokeText.default_font, self._effective_params())
 
     # -- geometry ------------------------------------------------------------------
     def _stroke_layout(self, px_per_pt, pos):
@@ -44,11 +86,12 @@ class _StrokeMixin:
         font = self.get_stroke_font()
         markup = self._sf_markup or StrokeText.default_markup
         parse_math = self.get_parse_math() if hasattr(self, 'get_parse_math') else True
-        cap_px = self.get_fontsize() * px_per_pt * self._sf_capheight
+        capheight = self._effective_capheight()
+        cap_px = self.get_fontsize() * px_per_pt * capheight
         lines = self.get_text().split('\n')
         ls = self.get_linespacing()
         ls = 1.2 if ls == 'normal' else float(ls)         # newer matplotlib: 'normal'
-        pitch = ls / self._sf_capheight                   # cap units
+        pitch = ls / capheight                            # cap units
         lay = [_line_geometry(font, ln, markup, parse_math) for ln in lines]
         W = max(l[2] for l in lay)
         ha = self.get_horizontalalignment()
@@ -94,7 +137,7 @@ class _StrokeMixin:
         calls to size the text.  Returns (bbox, info, (xy, size)) in pixels."""
         ppp = renderer.points_to_pixels(1.0)
         _, _, bbox = self._stroke_layout(ppp, np.zeros(2))
-        cap_px = self.get_fontsize() * ppp * self._sf_capheight
+        cap_px = self.get_fontsize() * ppp * self._effective_capheight()
         lines = self.get_text().split('\n')
         w, h = bbox.size
         desc = 0.3 * cap_px
@@ -113,6 +156,20 @@ class _StrokeMixin:
         return dpi / 72.0
 
     def get_window_extent(self, renderer=None, dpi=None):
+        """Return the display-coordinate bounding box of the stroke text.
+
+        Parameters
+        ----------
+        renderer : matplotlib renderer, optional
+            Unused; accepted for compatibility with ``matplotlib.text.Text``.
+        dpi : float, optional
+            Dots per inch used to convert points to pixels.  Defaults to the figure DPI.
+
+        Returns
+        -------
+        matplotlib.transforms.Bbox
+            The text bounding box in display coordinates.
+        """
         pos = np.asarray(self._get_xy_display(), float)
         if not self.get_visible() or not self.get_text():
             return Bbox.from_bounds(pos[0], pos[1], 0, 0)      # same as Text for empty strings
@@ -120,6 +177,7 @@ class _StrokeMixin:
 
     # -- drawing ---------------------------------------------------------------------
     def draw(self, renderer):
+        """Draw the stroke geometry with the active matplotlib renderer."""
         if not self.get_visible() or not self.get_text():
             return
         ppp = renderer.points_to_pixels(1.0)
@@ -131,8 +189,7 @@ class _StrokeMixin:
         gc = renderer.new_gc()
         gc.set_foreground(self.get_color())
         gc.set_alpha(self.get_alpha())
-        gc.set_linewidth(self._sf_linewidth if self._sf_linewidth is not None
-                         else 0.09 * self.get_fontsize())
+        gc.set_linewidth(self._effective_linewidth())
         gc.set_capstyle('round')
         gc.set_joinstyle('round')
         if hasattr(self, 'get_antialiased'):
@@ -148,25 +205,45 @@ class _StrokeMixin:
 
 
 class StrokeText(_StrokeMixin, _MplText):
-    """matplotlib.text.Text drawn with a Physica/TRIUMF stroke font -- a drop-in replacement.
+    """``matplotlib.text.Text`` drawn with a Physica/TRIUMF stroke font.
 
-    Usual Text options work (fontsize, color, ha/va, rotation, rotation_mode, linespacing,
-    multialignment, transform, clip_on, parse_math, ...); fontfamily/fontweight/fontstyle are
-    ignored.  Strings use matplotlib's mathtext conventions: text outside $...$ is literal,
-    inside $...$ the markup of `_parse_math` applies.
+    This is a drop-in replacement for ``Text``.  The usual Text options work (``fontsize``,
+    ``color``, ``alpha``, ``ha``, ``va``, ``rotation``, ``rotation_mode``, ``multialignment``,
+    ``linespacing``, ``transform``, ``clip_on``, ``zorder``, ``parse_math``, ...);
+    ``fontfamily``, ``fontweight`` and ``fontstyle`` are ignored.  Strings use matplotlib's
+    mathtext conventions: text outside ``$...$`` is literal, while text inside it uses the
+    mathtext subset described in the README.
 
     Extra keywords
     --------------
-    font      library font name (default StrokeText.default_font = 'TRIUMF.2')
-    linewidth pen width in points (default 0.09 * fontsize)
-    capheight cap height as a fraction of fontsize (default 0.72)
-    markup    'mathtext' (default), 'legacy' (original PSYM control characters, see UP/DOWN/...)
-              or 'plain' (no markup at all)
-    params    PSALPH-style font parameter overrides, e.g. {'SHGT': 0.7, 'LSPC': 4}
+    font : str, optional
+        Library font name.  Defaults to ``StrokeText.default_font`` (``"TRIUMF.2"``).
+    linewidth : float, optional
+        Pen width in points.  Defaults to ``StrokeText.default_linewidth`` or
+        ``0.09 * fontsize``.
+    capheight : float, optional
+        Cap height as a fraction of ``fontsize``.  Defaults to
+        ``StrokeText.default_capheight`` (``0.72``).
+    markup : {"mathtext", "legacy", "plain"}, optional
+        ``"mathtext"`` (default), ``"legacy"`` for the original PSYM control characters, or
+        ``"plain"`` for no markup.
+    params : dict, optional
+        PSALPH-style font parameter overrides, for example ``{"SHGT": 0.7, "LSPC": 4}``.
+        These are merged over ``StrokeText.default_params``.
+
+    Notes
+    -----
+    Installed defaults can be set globally with :func:`strokefont.install` or
+    :func:`strokefont.use`; explicit values passed to this constructor take precedence.
     """
 
     def __init__(self, x=0, y=0, text='', *, font=None, linewidth=None, capheight=None,
                  markup=None, params=None, **kw):
+        """Create a stroke-text artist at ``(x, y)``.
+
+        Positional arguments and ``**kw`` are forwarded to ``matplotlib.text.Text``; the
+        stroke-specific keywords are documented on the class.
+        """
         super().__init__(x, y, text, **kw)
         self.set_stroke_font(font, linewidth, capheight, markup, params)
 
