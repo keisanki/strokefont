@@ -3,15 +3,19 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-FONT_FILE = ROOT / "vaxfont.dat"
+FONT_FILES = (
+    ROOT / "src" / "strokefont" / "data" / "vaxfont.dat",
+    ROOT / "vaxfont.dat",
+)
 
 
 @pytest.fixture(scope="session")
 def font_file():
     """The local (unredistributed) font library used by the functional tests."""
-    if not FONT_FILE.is_file():
-        pytest.skip("vaxfont.dat is not available in the source checkout")
-    return FONT_FILE
+    for path in FONT_FILES:
+        if path.is_file():
+            return path
+    pytest.skip("vaxfont.dat is not available in the source checkout")
 
 
 @pytest.fixture

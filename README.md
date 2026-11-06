@@ -27,7 +27,7 @@ matplotlib script. The original PSYM control-character syntax is available as an
 | `docs/api.md` | Complete API reference for the public package interface |
 | `docs/` | Rendered examples and the generated character map |
 | `pyproject.toml` | Package metadata and build configuration |
-| `vaxfont.dat` | The local font library; not distributed (see [Licensing](#licensing-and-provenance)) |
+| `src/strokefont/data/vaxfont.dat` | Optional local font library (git-ignored); bundled into private installs when present (see [Licensing](#licensing-and-provenance)) |
 
 You also need `vaxfont.dat`, the font library. It is not part of this repository (see
 [Licensing](#licensing-and-provenance)).
@@ -114,9 +114,24 @@ export TRIUMF_FONTS=/path/to/dir/containing/vaxfont.dat    # same variable the F
 ```
 
 `TRIUMF_FONTS` may name either the directory or the file itself.  Without an explicit path,
-`strokefont` looks in `strokefont/data/vaxfont.dat` (useful if you have permission to bundle the
-font with the package), then `fonts/vaxfont.dat`, then `./vaxfont.dat`, mirroring `PFONT.F`.
-`sf.get_font_file()` reports the path that will be used.
+`strokefont` looks in `strokefont/data/vaxfont.dat`, then `fonts/vaxfont.dat`, then
+`./vaxfont.dat`, mirroring `PFONT.F`.  `sf.get_font_file()` reports the path that will be used.
+
+For a private installation that should not need `TRIUMF_FONTS` or `set_font_file()`, put the
+font at `src/strokefont/data/vaxfont.dat` before installing:
+
+```sh
+mkdir -p src/strokefont/data
+cp /path/to/vaxfont.dat src/strokefont/data/vaxfont.dat
+pip install .
+```
+
+That file is git-ignored, but the build configuration includes it in the wheel and sdist when it
+is present, so it lands at `strokefont/data/vaxfont.dat` inside the installation.  A
+`vaxfont.dat` in the project root is also recognized for regular (non-editable) builds, but the
+package-data location above works for editable installs too.  Builds still succeed when the file
+is absent.  Do not commit or redistribute the font without permission (see
+[Licensing](#licensing-and-provenance)).
 
 ## Examples
 

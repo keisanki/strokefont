@@ -37,7 +37,8 @@ def setup():
             if path.is_file():
                 sf.set_font_file(path)
                 return sf
-    for path in (ROOT / "fonts" / "vaxfont.dat", ROOT / "vaxfont.dat"):
+    for path in (ROOT / "src" / "strokefont" / "data" / "vaxfont.dat",
+                 ROOT / "fonts" / "vaxfont.dat", ROOT / "vaxfont.dat"):
         if path.is_file():
             sf.set_font_file(path)
             return sf

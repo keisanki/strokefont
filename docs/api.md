@@ -11,7 +11,9 @@ The installed version is available as `sf.__version__`.
 ## Font library
 
 The font data lives in `vaxfont.dat`, which is not distributed with the package. See
-[Installation](../README.md#installation) for the search order.
+[Installation](../README.md#installation) for the search order. For a private installation that
+bundles the font, place it at `src/strokefont/data/vaxfont.dat` before building; the build includes
+that git-ignored file in the wheel and sdist when it is present.
 
 ### `set_font_file(path)`
 

@@ -30,8 +30,12 @@ dev = [
     "pytest>=7.0",
 ]
 
+[tool.hatch.build.hooks.custom]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/strokefont"]
+# The font library is git-ignored but may be bundled for private installations.
+artifacts = ["src/strokefont/data/vaxfont.dat"]
 
 [tool.hatch.build.targets.sdist]
 include = [
@@ -43,6 +47,7 @@ include = [
     "/LICENSE",
     "/pyproject.toml",
 ]
+artifacts = ["src/strokefont/data/vaxfont.dat"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
