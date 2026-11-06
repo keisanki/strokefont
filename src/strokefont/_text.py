@@ -145,7 +145,7 @@ class _StrokeMixin:
 
     def _get_layout(self, renderer):
         """Text._get_layout replacement; this is what TextArea (legend entries, offsetboxes)
-        calls to size the text.  Returns (bbox, info, (xy, size)) in pixels."""
+        calls to size the text.  Returns (bbox, info, descent) in pixels."""
         ppp = renderer.points_to_pixels(1.0)
         _, _, bbox = self._stroke_layout(ppp, np.zeros(2))
         cap_px = self.get_fontsize() * ppp * self._effective_capheight()
@@ -154,7 +154,7 @@ class _StrokeMixin:
         desc = 0.3 * cap_px
         pitch = self._effective_linespacing() * self.get_fontsize() * ppp
         info = [(ln, (w, h - desc, desc), (0.0, -i * pitch)) for i, ln in enumerate(lines)]
-        return bbox, info, ((bbox.x0, bbox.y0), (w, h))
+        return bbox, info, desc
 
     def _fig_px_per_pt(self, dpi=None):
         if dpi is None:

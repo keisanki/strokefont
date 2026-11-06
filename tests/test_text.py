@@ -105,13 +105,63 @@ def test_stroke_texts_converts_existing_artists():
     fig, ax = plt.subplots()
     ax.set_title("title")
     ax.set_xlabel("x")
+    ax.plot([0, 1], label="line")
+    legend = ax.legend(title="legend title")
     fig.canvas.draw()
 
     sf.stroke_texts(fig, "TRIUMF.2")
 
     assert isinstance(ax.title, sf.StrokeText)
     assert isinstance(ax.xaxis.label, sf.StrokeText)
+    assert all(isinstance(t, sf.StrokeText) for t in legend.get_texts())
+    assert isinstance(legend.get_title(), sf.StrokeText)
     assert ax.title._sf_font == "TRIUMF.2"
+    fig.canvas.draw()
+    plt.close(fig)
+
+
+def test_layout_reports_descent_used_by_legend_textarea():
+    # matplotlib < 3.11's TextArea uses the third _get_layout return value as a scalar
+    # descent to position legend entries.
+    fig, ax = plt.subplots()
+    text = sf.StrokeText(0, 0, "one\ntwo")
+    bbox, info, descent = text._get_layout(fig.canvas.get_renderer())
+
+    assert isinstance(descent, float)
+    assert descent == info[-1][1][2]
+    assert bbox.width > 0
+    plt.close(fig)
+
+
+def test_legend_entries_and_title_use_stroketext():
+    with sf.use("TRIUMF.2"):
+        fig, ax = plt.subplots()
+        ax.plot([0, 1], label=r"$\alpha$ line")
+        legend = ax.legend(title="title")
+
+        assert len(legend.get_texts()) == 1
+        assert all(isinstance(t, sf.StrokeText) for t in legend.get_texts())
+        assert isinstance(legend.get_title(), sf.StrokeText)
+
+        fig.canvas.draw()
+        bbox = legend.get_window_extent(fig.canvas.get_renderer())
+        assert bbox.width > 0
+        assert bbox.height > 0
+
+    plt.close(fig)
+
+
+def test_stroke_texts_converts_existing_legend():
+    fig, ax = plt.subplots()
+    ax.plot([0, 1], label="line")
+    legend = ax.legend(title="title")
+    fig.canvas.draw()
+
+    sf.stroke_texts(legend, "ROMAN.2")
+
+    assert all(isinstance(t, sf.StrokeText) for t in legend.get_texts())
+    assert isinstance(legend.get_title(), sf.StrokeText)
+    assert legend.get_title()._sf_font == "ROMAN.2"
     fig.canvas.draw()
     plt.close(fig)
 
